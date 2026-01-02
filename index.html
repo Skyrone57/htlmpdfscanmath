@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF next level</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .upload-area {
+            border: 2px dashed #4CAF50;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            background-color: #f9f9f9;
+        }
+        .upload-area:hover {
+            background-color: #f0f0f0;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .upload-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .upload-btn:hover {
+            background-color: #45a049;
+        }
+        #pdf-viewer {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .file-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            display: none;
+        }
+        .results-container {
+            margin-top: 20px;
+            display: none;
+        }
+        .tag-section {
+            background-color: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .tag-section h3 {
+            margin-top: 0;
+            color: #ff9800;
+        }
+        .formula-item {
+            bclass="results-container" id="resultsContainer">
+            <h2>Extracted Formulas</h2>
+            <div id="extractedData"></div>
+            <button class="export-btn" onclick="exportToPDF()">📥 Export to PDF</button>
+        </div>
+        
+        <div ackground-color: white;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .formula-label {
+            font-weight: bold;
+            color: #333;
+        }
+        .formula-value {
+            color: #2196F3;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .export-btn {
+            background-color: #2196F3;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+        .export-btn:hover {
+            background-color: #1976D2;
+        }
+        .no-results {
+            padding: 20px;
+            background-color: #fff3cd;
+            border-radius: 4px;
+            color: #856404;
+        }
+        .progress-container {
+            display: none;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #e3f2fd;
+            border-radius: 8px;
+            border-left: 4px solid #2196F3;
+        }
+        .progress-bar-bg {
+            width: 100%;
+            height: 25px;
+            background-color: #ddd;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #2196F3);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .progress-text {
+            color: #1976D2;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2196F3;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PDF next level</h1>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>📄 Click to upload or drag and drop your PDF file here</p>
+            <input type="file" id="pdfInput" accept=".pdf,application/pdf">
+            <button class="upload-btn" onclick="document.getElementById('pdfInput').click()">
+                Choose PDF File
+            </button>
+        </div>
+
+        <div class="file-info" id="fileInfo"></div>
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-text" id="progressText">
+                <span class="spinner"></span>
+                <span id="progressMessage">Starting...</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+        </div>
+        
+        <div class="results-container" id="resultsContainer">
+            <h2>Extracted Formulas</h2>
+            <div id="extractedData"></div>
+            <button class="export-btn" onclick="exportToPDF()">📥 Export to PDF</button>
+        </div>
+        
+        <div id="pdf-viewer"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        // Wait for libraries to load
+        if (typeof pdfjsLib === 'undefined') {
+            console.error('PDF.js library failed to load!');
+            alert('Error: PDF.js library failed to load. Please refresh the page.');
+        } else {
+            console.log('PDF.js loaded successfully');
+        }
+        
+        // Set up PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const pdfInput = document.getElementById('pdfInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInfo = document.getElementById('fileInfo');
+        const pdfViewer = document.getElementById('pdf-viewer');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const extractedDataDiv = document.getElementById('extractedData');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressMessage = document.getElementById('progressMessage');
+
+        let extractedFormulas = {
+            tag1: {},
+            tag2: {}
+        };
+
+        function updateProgress(percent, message) {
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = percent + '%';
+            progressMessage.textContent = message;
+        }
+
+        // Handle file selection
+        pdfInput.addEventListener('change', handleFileSelect);
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '#e8f5e9';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.backgroundColor = '#f9f9f9';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '#f9f9f9';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+                pdfInput.files = files;
+                handleFileSelect({ target: { files: files } });
+            } else {
+                alert('Please upload a PDF file');
+            }
+        });
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            
+            console.log('File selected:', file);
+            
+            if (file && file.type === 'application/pdf') {
+                console.log('Valid PDF detected');
+                // Display file info
+                fileInfo.style.display = 'block';
+                fileInfo.innerHTML = `
+                    <strong>File uploaded:</strong> ${file.name}<br>
+                    <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB
+                `;
+
+                // Show progress
+                progressContainer.style.display = 'block';
+                resultsContainer.style.display = 'none';
+                updateProgress(0, 'Loading PDF...');
+                
+                console.log('Starting to read PDF...');
+
+                // Read and display PDF
+                const reader = new FileReader();
+                reader.onerror = function(e) {
+                    console.error('FileReader error:', e);
+                    alert('Error reading file');
+                };
+                reader.onload = async function(e) {
+                    try {
+                        console.log('File loaded, rendering...');
+                        updateProgress(20, 'Rendering PDF pages...');
+                        
+                        // Clone the ArrayBuffer to avoid detachment issues
+                        const pdfData = e.target.result.slice(0);
+                        
+                        await displayPDF(pdfData);
+                        updateProgress(50, 'Extracting text from PDF...');
+                        
+                        // Use the original buffer for extraction
+                        await extractFormulas(e.target.result);
+                    } catch (error) {
+                        console.error('Error processing PDF:', error);
+                        alert('Error: ' + error.message);
+                        progressContainer.style.display = 'none';
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                console.log('Invalid file type:', file ? file.type : 'no file');
+                alert('Please select a valid PDF file');
+            }
+        }
+
+        async function extractFormulas(pdfData) {
+            try {
+                const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                let fullText = '';
+
+                // Extract text from all pages
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const progress = 50 + Math.floor((pageNum / pdf.numPages) * 30);
+                    updateProgress(progress, `Extracting text from page ${pageNum} of ${pdf.numPages}...`);
+                    
+                    const page = await pdf.getPage(pageNum);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n';
+                }
+
+                // Parse the text for formulas
+                updateProgress(85, 'Analyzing formulas...');
+                parseFormulas(fullText);
+                
+                updateProgress(95, 'Preparing results...');
+                displayExtractedData();
+                
+                updateProgress(100, 'Complete!');
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 1000);
+            } catch (error) {
+                console.error('Error extracting text:', error);
+                progressContainer.style.display = 'none';
+                alert('Error scanning PDF: ' + error.message);
+            }
+        }
+
+        function parseFormulas(text) {
+            // Reset extracted formulas
+            extractedFormulas = { tag1: {}, tag2: {} };
+
+            // Tag 1 formulas
+            // Eaves + Valleys = # × 3 (for SF)
+            const eavesValleysPattern = /(?:eaves?|valley|valleys?).*?(\d+(?:\.\d+)?)/gi;
+            const matches1 = text.match(eavesValleysPattern);
+            if (matches1) {
+                const numbers = matches1.map(m => m.match(/\d+(?:\.\d+)?/)).filter(n => n);
+                if (numbers.length > 0) {
+                    const value = parseFloat(numbers[0][0]);
+                    extractedFormulas.tag1.eavesValleys = {
+                        original: value,
+                        calculated: value * 3,
+                        formula: 'Eaves + Valleys = # × 3 (for SF)'
+                    };
+                }
+            }
+
+            // Eaves + Rakes = LF drip edge
+            const eavesRakesPattern = /(?:eaves?|rakes?).*?(\d+(?:\.\d+)?)/gi;
+            const matches2 = text.match(eavesRakesPattern);
+            if (matches2) {
+                const numbers = matches2.map(m => m.match(/\d+(?:\.\d+)?/)).filter(n => n);
+                if (numbers.length > 0) {
+                    extractedFormulas.tag1.eavesRakes = {
+                        value: parseFloat(numbers[0][0]),
+                        formula: 'Eaves + Rakes = LF drip edge'
+                    };
+                }
+            }
+
+            // Hips + Ridges = ÷ 4 (round down to nearest whole #) ridge vent
+            const hipsRidgesPattern = /(?:hips?|ridges?).*?(\d+(?:\.\d+)?)/gi;
+            const matches3 = text.match(hipsRidgesPattern);
+            if (matches3) {
+                const numbers = matches3.map(m => m.match(/\d+(?:\.\d+)?/)).filter(n => n);
+                if (numbers.length > 0) {
+                    const value = parseFloat(numbers[0][0]);
+                    extractedFormulas.tag1.hipsRidges = {
+                        original: value,
+                        calculated: Math.floor(value / 4),
+                        formula: 'Hips + Ridges = ÷ 4 (round down) ridge vent'
+                    };
+                }
+            }
+
+            // Ice & water guard and underlayment
+            const iceWaterPattern = /(?:ice|water|guard|underlayment).*?(\d+(?:\.\d+)?)/gi;
+            const matches4 = text.match(iceWaterPattern);
+            if (matches4) {
+                const numbers = matches4.map(m => m.match(/\d+(?:\.\d+)?/)).filter(n => n);
+                if (numbers.length >= 2) {
+                    const totalArea = parseFloat(numbers[0][0]);
+                    const iceWater = parseFloat(numbers[1][0]);
+                    extractedFormulas.tag1.underlayment = {
+                        totalArea: totalArea,
+                        iceWater: iceWater,
+                        calculated: totalArea - iceWater,
+                        formula: 'Total SF - Ice & Water Guard = Underlayment SF'
+                    };
+                }
+            }
+
+            // Tag 2 formulas
+            // Starter strip matches drip edge
+            const starterPattern = /(?:starter|strip|drip|edge).*?(\d+(?:\.\d+)?)/gi;
+            const matches5 = text.match(starterPattern);
+            if (matches5) {
+                const numbers = matches5.map(m => m.match(/\d+(?:\.\d+)?/)).filter(n => n);
+                if (numbers.length > 0) {
+                    extractedFormulas.tag2.starterStrip = {
+                        value: parseFloat(numbers[0][0]),
+                        formula: 'Shingle starter strip = Total LF of drip edge'
+                    };
+                }
+            }
+
+            // Hip & ridge LF for ridge cap
+            const hipRidgeLFPattern = /(?:hip|ridge|cap).*?(\d+(?:\.\d+)?)/gi;
+            const matches6 = text.match(hipRidgeLFPattern);
+            if (matches6) {
+                const numbers = matches6.map(m => m.match(/\d+(?:\.\d+)?/)).filter(n => n);
+                if (numbers.length > 0) {
+                    extractedFormulas.tag2.hipRidgeLF = {
+                        value: parseFloat(numbers[0][0]),
+                        formula: 'Total hip & ridge LF stays the same for ridge cap'
+                    };
+                }
+            }
+
+            // Waste factor
+            const wastePattern = /(?:shingle|install|waste).*?(\d+(?:\.\d+)?)/gi;
+            const matches7 = text.match(wastePattern);
+            if (matches7) {
+                const numbers = matches7.map(m => m.match(/\d+(?:\.\d+)?/)).filter(n => n);
+                if (numbers.length > 0) {
+                    const value = parseFloat(numbers[0][0]);
+                    extractedFormulas.tag2.wasteFactor = {
+                        original: value,
+                        calculated: value * 1.10,
+                        formula: 'Add 10% waste factor (minimum) to shingle install'
+                    };
+                }
+            }
+
+            // Generic number extraction for any remaining values
+            const allNumbers = text.match(/\b\d+(?:\.\d+)?\b/g);
+            if (allNumbers) {
+                extractedFormulas.allNumbers = allNumbers.map(n => parseFloat(n));
+            }
+        }
+
+        function displayExtractedData() {
+            let html = '';
+            let hasData = false;
+
+            // Tag 1
+            if (Object.keys(extractedFormulas.tag1).length > 0) {
+                hasData = true;
+                html += '<div class="tag-section"><h3>📋 Tag 1 - Roofing Calculations</h3>';
+                
+                if (extractedFormulas.tag1.eavesValleys) {
+                    html += `<div class="formula-item">
+                        <div class="formula-label">${extractedFormulas.tag1.eavesValleys.formula}</div>
+                        <div class="formula-value">Original: ${extractedFormulas.tag1.eavesValleys.original} → Result: ${extractedFormulas.tag1.eavesValleys.calculated} SF</div>
+                    </div>`;
+                }
+                
+                if (extractedFormulas.tag1.eavesRakes) {
+                    html += `<div class="formula-item">
+                        <div class="formula-label">${extractedFormulas.tag1.eavesRakes.formula}</div>
+                        <div class="formula-value">LF: ${extractedFormulas.tag1.eavesRakes.value}</div>
+                    </div>`;
+                }
+                
+                if (extractedFormulas.tag1.hipsRidges) {
+                    html += `<div class="formula-item">
+                        <div class="formula-label">${extractedFormulas.tag1.hipsRidges.formula}</div>
+                        <div class="formula-value">Original: ${extractedFormulas.tag1.hipsRidges.original} → Ridge Vent: ${extractedFormulas.tag1.hipsRidges.calculated}</div>
+                    </div>`;
+                }
+                
+                if (extractedFormulas.tag1.underlayment) {
+                    html += `<div class="formula-item">
+                        <div class="formula-label">${extractedFormulas.tag1.underlayment.formula}</div>
+                        <div class="formula-value">${extractedFormulas.tag1.underlayment.totalArea} - ${extractedFormulas.tag1.underlayment.iceWater} = ${extractedFormulas.tag1.underlayment.calculated} SF</div>
+                    </div>`;
+                }
+                
+                html += '</div>';
+            }
+
+            // Tag 2
+            if (Object.keys(extractedFormulas.tag2).length > 0) {
+                hasData = true;
+                html += '<div class="tag-section"><h3>📋 Tag 2 - Material Matching</h3>';
+                
+                if (extractedFormulas.tag2.starterStrip) {
+                    html += `<div class="formula-item">
+                        <div class="formula-label">${extractedFormulas.tag2.starterStrip.formula}</div>
+                        <div class="formula-value">LF: ${extractedFormulas.tag2.starterStrip.value}</div>
+                    </div>`;
+                }
+                
+                if (extractedFormulas.tag2.hipRidgeLF) {
+                    html += `<div class="formula-item">
+                        <div class="formula-label">${extractedFormulas.tag2.hipRidgeLF.formula}</div>
+                        <div class="formula-value">LF: ${extractedFormulas.tag2.hipRidgeLF.value}</div>
+                    </div>`;
+                }
+                
+                if (extractedFormulas.tag2.wasteFactor) {
+                    html += `<div class="formula-item">
+                        <div class="formula-label">${extractedFormulas.tag2.wasteFactor.formula}</div>
+                        <div class="formula-value">Original: ${extractedFormulas.tag2.wasteFactor.original} → With 10% waste: ${extractedFormulas.tag2.wasteFactor.calculated.toFixed(2)}</div>
+                    </div>`;
+                }
+                
+                html += '</div>';
+            }
+
+            if (!hasData) {
+                html = '<div class="no-results">⚠️ No matching formulas found in the PDF. Make sure the PDF contains text related to roofing measurements (eaves, valleys, rakes, hips, ridges, etc.)</div>';
+            }
+
+            extractedDataDiv.innerHTML = html;
+            resultsContainer.style.display = 'block';
+        }
+
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            let yPos = 20;
+            doc.setFontSize(18);
+            doc.text('Extracted Roofing Formulas', 20, yPos);
+            yPos += 15;
+
+            // Tag 1
+            if (Object.keys(extractedFormulas.tag1).length > 0) {
+                doc.setFontSize(14);
+                doc.setTextColor(255, 152, 0);
+                doc.text('Tag 1 - Roofing Calculations', 20, yPos);
+                yPos += 10;
+                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(11);
+
+                if (extractedFormulas.tag1.eavesValleys) {
+                    doc.text('Eaves + Valleys = # × 3 (for SF)', 25, yPos);
+                    yPos += 6;
+                    doc.text(`  Original: ${extractedFormulas.tag1.eavesValleys.original} → Result: ${extractedFormulas.tag1.eavesValleys.calculated} SF`, 25, yPos);
+                    yPos += 10;
+                }
+
+                if (extractedFormulas.tag1.eavesRakes) {
+                    doc.text('Eaves + Rakes = LF drip edge', 25, yPos);
+                    yPos += 6;
+                    doc.text(`  LF: ${extractedFormulas.tag1.eavesRakes.value}`, 25, yPos);
+                    yPos += 10;
+                }
+
+                if (extractedFormulas.tag1.hipsRidges) {
+                    doc.text('Hips + Ridges = ÷ 4 (round down) ridge vent', 25, yPos);
+                    yPos += 6;
+                    doc.text(`  Original: ${extractedFormulas.tag1.hipsRidges.original} → Ridge Vent: ${extractedFormulas.tag1.hipsRidges.calculated}`, 25, yPos);
+                    yPos += 10;
+                }
+
+                if (extractedFormulas.tag1.underlayment) {
+                    doc.text('Total SF - Ice & Water Guard = Underlayment SF', 25, yPos);
+                    yPos += 6;
+                    doc.text(`  ${extractedFormulas.tag1.underlayment.totalArea} - ${extractedFormulas.tag1.underlayment.iceWater} = ${extractedFormulas.tag1.underlayment.calculated} SF`, 25, yPos);
+                    yPos += 10;
+                }
+            }
+
+            // Tag 2
+            if (Object.keys(extractedFormulas.tag2).length > 0) {
+                yPos += 5;
+                doc.setFontSize(14);
+                doc.setTextColor(255, 152, 0);
+                doc.text('Tag 2 - Material Matching', 20, yPos);
+                yPos += 10;
+                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(11);
+
+                if (extractedFormulas.tag2.starterStrip) {
+                    doc.text('Shingle starter strip = Total LF of drip edge', 25, yPos);
+                    yPos += 6;
+                    doc.text(`  LF: ${extractedFormulas.tag2.starterStrip.value}`, 25, yPos);
+                    yPos += 10;
+                }
+
+                if (extractedFormulas.tag2.hipRidgeLF) {
+                    doc.text('Total hip & ridge LF stays the same for ridge cap', 25, yPos);
+                    yPos += 6;
+                    doc.text(`  LF: ${extractedFormulas.tag2.hipRidgeLF.value}`, 25, yPos);
+                    yPos += 10;
+                }
+
+                if (extractedFormulas.tag2.wasteFactor) {
+                    doc.text('Add 10% waste factor (minimum) to shingle install', 25, yPos);
+                    yPos += 6;
+                    doc.text(`  Original: ${extractedFormulas.tag2.wasteFactor.original} → With waste: ${extractedFormulas.tag2.wasteFactor.calculated.toFixed(2)}`, 25, yPos);
+                    yPos += 10;
+                }
+            }
+
+            // Save the PDF
+            doc.save('extracted-roofing-formulas.pdf');
+        }
+
+        async function displayPDF(pdfData) {
+            try {
+                const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                pdfViewer.innerHTML = '';
+
+                // Render all pages
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const scale = 1.5;
+                    const viewport = page.getViewport({ scale });
+
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    canvas.style.display = 'block';
+                    canvas.style.margin = '10px auto';
+                    canvas.style.border = '1px solid #ddd';
+
+                    pdfViewer.appendChild(canvas);
+
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+
+                    await page.render(renderContext).promise;
+                }
+            } catch (error) {
+                console.error('Error rendering PDF:', error);
+                pdfViewer.innerHTML = '<p style="color: red;">Error loading PDF. Please try another file.</p>';
+            }
+        }
+    </script>
+</body>
+</html>
