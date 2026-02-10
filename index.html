@@ -733,9 +733,9 @@
         function getAddressSuggestions(query) {
             console.log('Getting suggestions for:', query);
             
-            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
+            const proxyUrl = `http://localhost:8001/api/geocode?q=${encodeURIComponent(query)}&limit=5`;
             
-            fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(nominatimUrl)}`)
+            fetch(proxyUrl)
                 .then(response => response.json())
                 .then(data => {
                     console.log('Suggestions:', data);
@@ -809,13 +809,13 @@
             // Show loading state
             showAddressResult('🔄 Searching...', 0, 0);
             
-            // Use OpenStreetMap Nominatim with CORS proxy
-            console.log('Using OpenStreetMap Nominatim with CORS proxy...');
+            // Use local proxy server
+            console.log('Using local proxy server...');
             
-            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`;
-            console.log('Fetching from:', nominatimUrl);
+            const proxyUrl = `http://localhost:8001/api/geocode?q=${encodeURIComponent(address)}&limit=1`;
+            console.log('Fetching from:', proxyUrl);
             
-            fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(nominatimUrl)}`)
+            fetch(proxyUrl)
                 .then(response => {
                     console.log('Response status:', response.status);
                     return response.json();
