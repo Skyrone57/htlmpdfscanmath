@@ -700,6 +700,26 @@
     
     <script>
         
+        // Get the correct proxy URL based on current host
+        function getProxyURL(endpoint, params) {
+            // If running on Codespace/GitHub Pages, use the same host but port 8001
+            let proxyBase = 'http://localhost:8001';
+            
+            if (window.location.hostname.includes('app.github.dev')) {
+                // Running on GitHub Codespace - replace port 8000 with 8001
+                proxyBase = `https://${window.location.hostname.replace('-8000.', '-8001.')}`;
+            }
+            
+            let url = `${proxyBase}${endpoint}`;
+            if (params) {
+                const queryString = Object.keys(params)
+                    .map(key => `${key}=${encodeURIComponent(params[key])}`)
+                    .join('&');
+                url += `?${queryString}`;
+            }
+            return url;
+        }
+        
         function setupEventListeners() {
             const imageInput = document.getElementById('imageInput');
             if (imageInput) {
@@ -733,7 +753,8 @@
         function getAddressSuggestions(query) {
             console.log('Getting suggestions for:', query);
             
-            const proxyUrl = `http://localhost:8001/api/geocode?q=${encodeURIComponent(query)}&limit=5`;
+            const proxyUrl = getProxyURL('/api/geocode', { q: query, limit: 5 });
+            console.log('Proxy URL:', proxyUrl);
             
             fetch(proxyUrl)
                 .then(response => response.json())
@@ -812,7 +833,7 @@
             // Use local proxy server
             console.log('Using local proxy server...');
             
-            const proxyUrl = `http://localhost:8001/api/geocode?q=${encodeURIComponent(address)}&limit=1`;
+            const proxyUrl = getProxyURL('/api/geocode', { q: address, limit: 1 });
             console.log('Fetching from:', proxyUrl);
             
             fetch(proxyUrl)
