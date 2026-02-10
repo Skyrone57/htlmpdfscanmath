@@ -649,13 +649,23 @@
             ctx = canvas.getContext('2d');
             setupEventListeners();
             
-            // Initialize geocoder after Google Maps API loads
-            setTimeout(() => {
+            // Initialize geocoder after Google Maps API loads - with retry logic
+            let retries = 0;
+            const initializeGeocoder = () => {
                 if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
                     geocoder = new google.maps.Geocoder();
-                    console.log('Google Maps Geocoder initialized');
+                    console.log('✓ Google Maps Geocoder initialized successfully');
+                } else {
+                    retries++;
+                    if (retries < 20) { // Try for up to 20 seconds
+                        console.log('Waiting for Google Maps API... (attempt ' + retries + ')');
+                        setTimeout(initializeGeocoder, 1000);
+                    } else {
+                        console.error('Failed to load Google Maps API after multiple attempts');
+                    }
                 }
-            }, 1000);
+            };
+            initializeGeocoder();
         });
     </script>
     
@@ -684,18 +694,31 @@
                 return;
             }
             
+            console.log('=== Address Search Started ===');
+            console.log('Address input:', address);
+            console.log('Geocoder exists:', geocoder !== null);
+            console.log('Google Maps API:', typeof google !== 'undefined' && typeof google.maps !== 'undefined');
+            
             // Check if geocoder is initialized
             if (!geocoder) {
-                showAddressError('Google Maps is still loading. Please try again in a moment.');
-                console.log('Geocoder not initialized yet');
-                return;
+                console.error('Geocoder not initialized. Initializing now...');
+                if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
+                    geocoder = new google.maps.Geocoder();
+                    console.log('Geocoder created');
+                } else {
+                    showAddressError('Google Maps API is still loading. Please wait a moment and try again.');
+                    console.error('Google Maps API not available');
+                    return;
+                }
             }
             
-            console.log('Searching for address:', address);
+            console.log('Starting geocode request...');
             
             geocoder.geocode({ address: address }, (results, status) => {
-                console.log('Geocode status:', status);
+                console.log('=== Geocode Response ===');
+                console.log('Status:', status);
                 console.log('Results:', results);
+                console.log('Results length:', results ? results.length : 0);
                 
                 if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
                     const location = results[0].geometry.location;
@@ -703,13 +726,15 @@
                     const lng = location.lng();
                     const formattedAddress = results[0].formatted_address;
                     
-                    console.log('Found location:', lat, lng);
+                    console.log('✓ Success! Location:', lat, lng);
+                    console.log('Formatted address:', formattedAddress);
                     
                     showAddressResult(formattedAddress, lat, lng);
                     fetchSatelliteImage(lat, lng, formattedAddress);
                 } else {
-                    showAddressError('Address not found. Please try a different address. (Status: ' + status + ')');
-                    console.error('Geocode failed:', status);
+                    const errorMsg = `Address not found (Status: ${status}). Try adding city and state like: "3519 Sciotangy Drive, Columbus, OH"`;
+                    showAddressError(errorMsg);
+                    console.error('Geocode failed:', status, results);
                 }
             });
         }
@@ -773,8 +798,9 @@
         
         function showAddressError(message) {
             const resultDiv = document.getElementById('addressResult') || createAddressResultDiv();
-            resultDiv.innerHTML = `<p>${message}</p>`;
+            resultDiv.innerHTML = `<p><strong>❌ Error:</strong> ${message}</p>`;
             resultDiv.className = 'address-error';
+            console.error('Address error:', message);
         }
         
         function createAddressResultDiv() {
