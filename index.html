@@ -800,10 +800,24 @@
             searchInProgress = true;
             
             showAddressResult(fullAddress, lat, lng);
-            document.getElementById('roofArea').value = '4500';
             
             // Fetch satellite image
             fetchSatelliteImageOSM(lat, lng, fullAddress);
+            
+            // Analyze roof area from satellite image
+            console.log('Analyzing roof from satellite image...');
+            fetch(getProxyURL('/api/analyze-roof', { lat: lat, lng: lng }))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.roof_area) {
+                        console.log('✓ Auto-detected roof area:', data.roof_area, 'SF');
+                        document.getElementById('roofArea').value = data.roof_area;
+                    }
+                })
+                .catch(error => {
+                    console.log('Could not auto-detect roof area, using default:', error);
+                    document.getElementById('roofArea').value = '4500';
+                });
         }
         
         function searchAddress() {
@@ -857,11 +871,26 @@
                         currentAddress = displayName;
                         showAddressResult(displayName, lat, lng);
                         
-                        // Set roof area
-                        document.getElementById('roofArea').value = '4500';
-                        
                         // Fetch satellite image
                         fetchSatelliteImageOSM(lat, lng, displayName);
+                        
+                        // Analyze roof area from satellite image
+                        console.log('Analyzing roof from satellite image...');
+                        fetch(getProxyURL('/api/analyze-roof', { lat: lat, lng: lng }))
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.roof_area) {
+                                    console.log('✓ Auto-detected roof area:', data.roof_area, 'SF');
+                                    document.getElementById('roofArea').value = data.roof_area;
+                                    // Trigger estimate generation after setting roof area
+                                    setTimeout(() => generateEstimate(), 500);
+                                }
+                            })
+                            .catch(error => {
+                                console.log('Could not auto-detect roof area, using default:', error);
+                                document.getElementById('roofArea').value = '4500';
+                                setTimeout(() => generateEstimate(), 500);
+                            });
                     } else {
                         console.error('No results from Nominatim');
                         showAddressError('Address not found. Start typing to see suggestions.');

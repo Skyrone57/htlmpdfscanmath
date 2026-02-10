@@ -7,8 +7,91 @@ from urllib.parse import urlparse, parse_qs
 import os
 import sys
 import mimetypes
+import json
+import io
+
+# Image processing libraries
+try:
+    import numpy as np
+    from PIL import Image
+    import cv2
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+    print("[WARNING] OpenCV/PIL not available. Install with: pip install opencv-python pillow numpy", file=sys.stderr)
 
 PORT = 8000
+
+def detect_roof_area(lat, lng):
+    """
+    Detect building/roof area from satellite image using edge detection.
+    Returns estimated roof area in square feet.
+    """
+    if not HAS_CV2:
+        # Fallback: return a reasonable default
+        return 4500
+    
+    try:
+        # Fetch satellite tile from ESRI
+        zoom = 18
+        # Convert lat/lng to tile coordinates
+        n = 2.0 ** zoom
+        x = int((lng + 180.0) / 360.0 * n)
+        y = int((1.0 - np.log(np.tan((lat * np.pi / 180.0) + np.pi / 4.0) / np.pi)) / 2.0 * n)
+        
+        tile_url = f'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{zoom}/{x}/{y}'
+        
+        print(f"[ANALYSIS] Fetching tile from: {tile_url}", file=sys.stderr, flush=True)
+        
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        
+        with urllib.request.urlopen(tile_url, context=ctx, timeout=10) as response:
+            img_data = response.read()
+        
+        # Load image
+        img = Image.open(io.BytesIO(img_data))
+        img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        
+        # Convert to grayscale
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+        
+        # Apply Canny edge detection
+        edges = cv2.Canny(gray, 50, 150)
+        
+        # Find contours
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if not contours:
+            return 4500  # Default if no contours found
+        
+        # Find the largest contour (likely the building)
+        largest_contour = max(contours, key=cv2.contourArea)
+        area_pixels = cv2.contourArea(largest_contour)
+        
+        # Convert pixels to real-world area
+        # At zoom level 18, ESRI tiles are 256x256 pixels
+        # Each tile covers approximately 38.2 meters x 38.2 meters at equator
+        meters_per_tile = 38.2  # Approximate at US latitudes
+        meters_per_pixel = meters_per_tile / 256.0
+        sq_meters_per_pixel = meters_per_pixel ** 2
+        
+        area_sq_meters = area_pixels * sq_meters_per_pixel
+        area_sq_feet = area_sq_meters * 10.764  # Convert to sq feet
+        
+        # Sanity checks - roof area typically 1000-10000 SF
+        if area_sq_feet < 500:
+            area_sq_feet = 4500
+        elif area_sq_feet > 15000:
+            area_sq_feet = 8000
+        
+        print(f"[ANALYSIS] Detected area: {area_sq_feet:.0f} SF (from {area_pixels:.0f} pixels)", file=sys.stderr, flush=True)
+        return round(area_sq_feet / 100) * 100  # Round to nearest 100
+        
+    except Exception as e:
+        print(f"[ANALYSIS] Error: {e}", file=sys.stderr, flush=True)
+        return 4500  # Default fallback
 
 class CombinedHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -57,6 +140,42 @@ class CombinedHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_error(503, f"Nominatim unavailable: {str(e)}")
             except Exception as e:
                 print(f"[API] ✗ Error: {e}", file=sys.stderr, flush=True)
+                self.send_json_error(500, str(e))
+        
+        elif parsed_path.path == '/api/analyze-roof':
+            try:
+                query_params = parse_qs(parsed_path.query)
+                lat = query_params.get('lat', [''])[0]
+                lng = query_params.get('lng', [''])[0]
+                
+                if not lat or not lng:
+                    self.send_json_error(400, "Missing 'lat' or 'lng' parameter")
+                    return
+                
+                lat = float(lat)
+                lng = float(lng)
+                
+                print(f"[API] Analyzing roof at {lat}, {lng}", file=sys.stderr, flush=True)
+                
+                # Detect roof area
+                roof_area = detect_roof_area(lat, lng)
+                
+                response = json.dumps({"roof_area": roof_area}).encode()
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.send_header('Content-Length', len(response))
+                self.end_headers()
+                self.wfile.write(response)
+                print(f"[API] ✓ Roof analysis complete: {roof_area} SF", file=sys.stderr, flush=True)
+                
+            except ValueError as e:
+                self.send_json_error(400, f"Invalid coordinates: {str(e)}")
+            except Exception as e:
+                print(f"[API] ✗ Analysis Error: {e}", file=sys.stderr, flush=True)
                 self.send_json_error(500, str(e))
         
         elif parsed_path.path == '/api/image':
