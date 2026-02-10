@@ -792,6 +792,10 @@
         function selectAddressSuggestion(lat, lng, fullAddress) {
             console.log('Selected:', lat, lng, fullAddress);
             
+            // Convert to numbers in case they come as strings from API
+            lat = parseFloat(lat);
+            lng = parseFloat(lng);
+            
             currentAddress = fullAddress;
             searchInProgress = true;
             
@@ -974,6 +978,10 @@
         
         function showAddressResult(address, lat, lng) {
             const resultDiv = document.getElementById('addressResult') || createAddressResultDiv();
+            // Ensure lat and lng are numbers
+            lat = parseFloat(lat);
+            lng = parseFloat(lng);
+            
             if (lat !== 0 && lng !== 0) {
                 resultDiv.innerHTML = `
                     <p><strong>✓ Location Found:</strong></p>
