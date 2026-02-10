@@ -571,6 +571,7 @@
         <div class="estimate-container" id="estimateContainer">
             <div class="estimate-header">
                 <h1>ROOF REPLACEMENT ESTIMATE</h1>
+                <p id="propertyAddress" style="color: #666; font-size: 0.95em; margin: 10px 0;"></p>
                 <p id="estimateDate"></p>
             </div>
             
@@ -642,6 +643,8 @@
         let pixelsPerFoot = null;
         let currentImage = null;
         let geocoder = null;
+        let currentAddress = 'Unknown Address';
+        let searchInProgress = false;
         
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -694,43 +697,32 @@
                 return;
             }
             
+            if (searchInProgress) {
+                alert('Search already in progress. Please wait...');
+                return;
+            }
+            
+            searchInProgress = true;
             console.log('=== Address Search Started ===');
             console.log('Address input:', address);
             
             // Show loading state
-            showAddressResult('Loading...', 0, 0);
-            document.getElementById('roofArea').value = '4500';
-            
-            // If geocoder is available, try to use it
-            if (geocoder) {
-                console.log('Using Google Maps Geocoder...');
-                
-                geocoder.geocode({ address: address }, (results, status) => {
-                    console.log('Geocode status:', status);
-                    
-                    if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
-                        const location = results[0].geometry.location;
-                        const lat = location.lat();
-                        const lng = location.lng();
-                        const formattedAddress = results[0].formatted_address;
-                        
-                        console.log('✓ Location found:', lat, lng);
-                        showAddressResult(formattedAddress, lat, lng);
-                        fetchSatelliteImage(lat, lng, formattedAddress);
-                        return;
-                    } else {
-                        console.log('Geocoding failed, using fallback...');
-                    }
-                });
-            }
+            showAddressResult('🔄 Searching...', 0, 0);
             
             // Fallback: Use OpenStreetMap Nominatim (free, no API key needed)
-            console.log('Using OpenStreetMap Nominatim fallback...');
+            console.log('Using OpenStreetMap Nominatim...');
             
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
-                .then(response => response.json())
+            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
+            console.log('Fetching from:', nominatimUrl);
+            
+            fetch(nominatimUrl)
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    return response.json();
+                })
                 .then(data => {
-                    console.log('Nominatim response:', data);
+                    console.log('=== Nominatim Response ===');
+                    console.log('Raw data:', data);
                     
                     if (data && data.length > 0) {
                         const result = data[0];
@@ -738,19 +730,29 @@
                         const lng = parseFloat(result.lon);
                         const displayName = result.display_name;
                         
-                        console.log('✓ Location found:', lat, lng);
+                        console.log('✓ Location found!');
+                        console.log('Lat:', lat, 'Lng:', lng);
+                        console.log('Display name:', displayName);
+                        
+                        currentAddress = displayName;
                         showAddressResult(displayName, lat, lng);
                         
-                        // Fetch satellite image from new (free) map service
+                        // Set roof area
+                        document.getElementById('roofArea').value = '4500';
+                        
+                        // Fetch satellite image
                         fetchSatelliteImageOSM(lat, lng, displayName);
                     } else {
-                        showAddressError('Address not found. Please try with more details like: "3519 Sciotangy Drive, Columbus, Ohio"');
                         console.error('No results from Nominatim');
+                        showAddressError('Address not found. Please try with more details like: "3519 Sciotangy Drive, Columbus, Ohio"');
+                        searchInProgress = false;
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching location:', error);
-                    showAddressError('Error finding address. Please check the spelling and try again.');
+                    console.error('Error details:', error.message);
+                    showAddressError('Error finding address: ' + error.message);
+                    searchInProgress = false;
                 });
         }
         
@@ -798,7 +800,8 @@
         
         function fetchSatelliteImageOSM(lat, lng, address) {
             // Using Bing Maps aerial imagery via OpenStreetMap tiles
-            console.log('Using Bing Maps satellite imagery...');
+            console.log('Fetching satellite image for:', address);
+            console.log('Coordinates:', lat, lng);
             
             const zoom = 18;
             const x = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
@@ -806,11 +809,13 @@
             
             const imageUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
             
+            console.log('Satellite image URL:', imageUrl);
+            
             const img = new Image();
             img.crossOrigin = "anonymous";
             
             img.onload = () => {
-                console.log('✓ Satellite image loaded from Bing/ESRI');
+                console.log('✓ Satellite image loaded successfully');
                 currentImage = img;
                 canvas.width = 800;
                 canvas.height = 600;
@@ -824,20 +829,26 @@
                 pixelsPerFoot = null;
                 measurementMode = false;
                 
+                currentAddress = address;
+                document.getElementById('roofArea').value = '4500';
+                
                 // Auto-generate estimate
+                console.log('Generating estimate...');
                 setTimeout(() => {
+                    searchInProgress = false;
                     generateEstimate();
                 }, 300);
             };
             
             img.onerror = (error) => {
-                console.error('All satellite image services failed');
-                // If all satellite services fail, just show the map and generate estimate anyway
-                showAddressResult(address, lat, lng);
+                console.error('Satellite image load failed, proceeding anyway...');
                 document.getElementById('imagePreview').style.display = 'none';
+                currentAddress = address;
+                document.getElementById('roofArea').value = '4500';
                 
                 // Still generate estimate automatically
                 setTimeout(() => {
+                    searchInProgress = false;
                     generateEstimate();
                 }, 300);
             };
@@ -847,14 +858,20 @@
         
         function showAddressResult(address, lat, lng) {
             const resultDiv = document.getElementById('addressResult') || createAddressResultDiv();
-            resultDiv.innerHTML = `
-                <p><strong>Location Found:</strong></p>
-                <p>${address}</p>
-                <div class="coordinates-display">
-                    Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}
-                </div>
-            `;
-            resultDiv.className = 'address-result';
+            if (lat !== 0 && lng !== 0) {
+                resultDiv.innerHTML = `
+                    <p><strong>✓ Location Found:</strong></p>
+                    <p>${address}</p>
+                    <div class="coordinates-display">
+                        Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}
+                    </div>
+                `;
+                resultDiv.className = 'address-result';
+            } else {
+                resultDiv.innerHTML = `<p>🔄 ${address}</p>`;
+                resultDiv.className = 'address-result';
+            }
+            console.log('Address result displayed:', address);
         }
         
         function showAddressError(message) {
@@ -1052,10 +1069,17 @@
         }
         
         function generateEstimate() {
+            console.log('=== Generating Estimate ===');
+            console.log('Current Address:', currentAddress);
+            console.log('Search in progress:', searchInProgress);
+            
             const roofArea = parseFloat(document.getElementById('roofArea').value);
             const laborCost = parseFloat(document.getElementById('laborCostPerSF').value);
             const shingleType = document.getElementById('shingleType').value;
             const estimatorName = document.getElementById('estimatorName').value || 'Professional Estimator';
+            
+            console.log('Roof area:', roofArea);
+            console.log('Labor cost per SF:', laborCost);
             
             if (!roofArea || roofArea <= 0) {
                 alert('Please enter a valid roof area');
@@ -1106,6 +1130,7 @@
             
             document.getElementById('totalAmount').textContent = '$' + roundedTotal.toLocaleString();
             document.getElementById('estimateDate').textContent = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('propertyAddress').textContent = '📍 Property: ' + currentAddress;
             
             // Summary
             document.getElementById('summaryArea').textContent = roofArea.toFixed(0) + ' SF';
