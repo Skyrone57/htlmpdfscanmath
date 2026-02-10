@@ -670,10 +670,19 @@
                 return;
             }
             
+            // Check if Google Maps API is loaded
+            if (typeof google === 'undefined' || typeof google.maps === 'undefined') {
+                showAddressError('Google Maps API is not loaded. Please refresh the page.');
+                return;
+            }
+            
             const geocoder = new google.maps.Geocoder();
             
             geocoder.geocode({ address: address }, (results, status) => {
-                if (status === 'OK') {
+                console.log('Geocode status:', status);
+                console.log('Results:', results);
+                
+                if (status === 'OK' && results && results.length > 0) {
                     const location = results[0].geometry.location;
                     const lat = location.lat();
                     const lng = location.lng();
@@ -682,7 +691,7 @@
                     showAddressResult(formattedAddress, lat, lng);
                     fetchSatelliteImage(lat, lng, formattedAddress);
                 } else {
-                    showAddressError('Address not found. Please try a different address.');
+                    showAddressError('Address not found. Please try a different address. (Status: ' + status + ')');
                 }
             });
         }
@@ -696,10 +705,13 @@
             
             const imageUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${size}&maptype=${mapType}&key=${apiKey}`;
             
+            console.log('Fetching satellite image from:', imageUrl);
+            
             const img = new Image();
             img.crossOrigin = "anonymous";
             
             img.onload = () => {
+                console.log('Satellite image loaded successfully');
                 currentImage = img;
                 canvas.width = img.width;
                 canvas.height = img.height;
@@ -712,11 +724,13 @@
                 measurementMode = false;
                 
                 // Set default roof area estimate (typical residential roof)
-                // Based on typical property estimations
                 document.getElementById('roofArea').value = '4500';
+                
+                showAddressResult(address, lat, lng);
             };
             
-            img.onerror = () => {
+            img.onerror = (error) => {
+                console.error('Error loading satellite image:', error);
                 showAddressError('Could not load satellite image. Please try another address.');
             };
             
@@ -742,10 +756,13 @@
         }
         
         function createAddressResultDiv() {
-            const div = document.createElement('div');
-            div.id = 'addressResult';
-            document.querySelector('.address-search-section').appendChild(div);
-            return div;
+            let resultDiv = document.getElementById('addressResult');
+            if (!resultDiv) {
+                resultDiv = document.createElement('div');
+                resultDiv.id = 'addressResult';
+                document.getElementById('addressInput').parentElement.appendChild(resultDiv);
+            }
+            return resultDiv;
         }
         
         function handleImageSelect(file) {
