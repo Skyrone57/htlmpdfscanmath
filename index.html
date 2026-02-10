@@ -696,47 +696,62 @@
             
             console.log('=== Address Search Started ===');
             console.log('Address input:', address);
-            console.log('Geocoder exists:', geocoder !== null);
-            console.log('Google Maps API:', typeof google !== 'undefined' && typeof google.maps !== 'undefined');
             
-            // Check if geocoder is initialized
-            if (!geocoder) {
-                console.error('Geocoder not initialized. Initializing now...');
-                if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
-                    geocoder = new google.maps.Geocoder();
-                    console.log('Geocoder created');
-                } else {
-                    showAddressError('Google Maps API is still loading. Please wait a moment and try again.');
-                    console.error('Google Maps API not available');
-                    return;
-                }
+            // Show loading state
+            showAddressResult('Loading...', 0, 0);
+            document.getElementById('roofArea').value = '4500';
+            
+            // If geocoder is available, try to use it
+            if (geocoder) {
+                console.log('Using Google Maps Geocoder...');
+                
+                geocoder.geocode({ address: address }, (results, status) => {
+                    console.log('Geocode status:', status);
+                    
+                    if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
+                        const location = results[0].geometry.location;
+                        const lat = location.lat();
+                        const lng = location.lng();
+                        const formattedAddress = results[0].formatted_address;
+                        
+                        console.log('✓ Location found:', lat, lng);
+                        showAddressResult(formattedAddress, lat, lng);
+                        fetchSatelliteImage(lat, lng, formattedAddress);
+                        return;
+                    } else {
+                        console.log('Geocoding failed, using fallback...');
+                    }
+                });
             }
             
-            console.log('Starting geocode request...');
+            // Fallback: Use OpenStreetMap Nominatim (free, no API key needed)
+            console.log('Using OpenStreetMap Nominatim fallback...');
             
-            geocoder.geocode({ address: address }, (results, status) => {
-                console.log('=== Geocode Response ===');
-                console.log('Status:', status);
-                console.log('Results:', results);
-                console.log('Results length:', results ? results.length : 0);
-                
-                if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
-                    const location = results[0].geometry.location;
-                    const lat = location.lat();
-                    const lng = location.lng();
-                    const formattedAddress = results[0].formatted_address;
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Nominatim response:', data);
                     
-                    console.log('✓ Success! Location:', lat, lng);
-                    console.log('Formatted address:', formattedAddress);
-                    
-                    showAddressResult(formattedAddress, lat, lng);
-                    fetchSatelliteImage(lat, lng, formattedAddress);
-                } else {
-                    const errorMsg = `Address not found (Status: ${status}). Try adding city and state like: "3519 Sciotangy Drive, Columbus, OH"`;
-                    showAddressError(errorMsg);
-                    console.error('Geocode failed:', status, results);
-                }
-            });
+                    if (data && data.length > 0) {
+                        const result = data[0];
+                        const lat = parseFloat(result.lat);
+                        const lng = parseFloat(result.lon);
+                        const displayName = result.display_name;
+                        
+                        console.log('✓ Location found:', lat, lng);
+                        showAddressResult(displayName, lat, lng);
+                        
+                        // Fetch satellite image from new (free) map service
+                        fetchSatelliteImageOSM(lat, lng, displayName);
+                    } else {
+                        showAddressError('Address not found. Please try with more details like: "3519 Sciotangy Drive, Columbus, Ohio"');
+                        console.error('No results from Nominatim');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching location:', error);
+                    showAddressError('Error finding address. Please check the spelling and try again.');
+                });
         }
         
         function fetchSatelliteImage(lat, lng, address) {
@@ -748,13 +763,13 @@
             
             const imageUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${size}&maptype=${mapType}&key=${apiKey}`;
             
-            console.log('Fetching satellite image from:', imageUrl);
+            console.log('Fetching satellite image from Google Maps...');
             
             const img = new Image();
             img.crossOrigin = "anonymous";
             
             img.onload = () => {
-                console.log('Satellite image loaded successfully');
+                console.log('✓ Google satellite image loaded');
                 currentImage = img;
                 canvas.width = img.width;
                 canvas.height = img.height;
@@ -766,19 +781,65 @@
                 pixelsPerFoot = null;
                 measurementMode = false;
                 
-                // Set default roof area estimate (typical residential roof)
-                document.getElementById('roofArea').value = '4500';
-                showAddressResult(address, lat, lng);
+                // Auto-generate estimate
+                setTimeout(() => {
+                    generateEstimate();
+                }, 300);
+            };
+            
+            img.onerror = (error) => {
+                console.error('Google Maps image failed, trying fallback...');
+                // Fallback to open map
+                fetchSatelliteImageOSM(lat, lng, address);
+            };
+            
+            img.src = imageUrl;
+        }
+        
+        function fetchSatelliteImageOSM(lat, lng, address) {
+            // Using Bing Maps aerial imagery via OpenStreetMap tiles
+            console.log('Using Bing Maps satellite imagery...');
+            
+            const zoom = 18;
+            const x = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
+            const y = Math.floor((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+            
+            const imageUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
+            
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            
+            img.onload = () => {
+                console.log('✓ Satellite image loaded from Bing/ESRI');
+                currentImage = img;
+                canvas.width = 800;
+                canvas.height = 600;
+                
+                // Draw the tile and scale it
+                ctx.drawImage(img, 0, 0, 256, 256, 0, 0, 800, 600);
+                imageLoaded = true;
+                
+                document.getElementById('imagePreview').style.display = 'block';
+                points = [];
+                pixelsPerFoot = null;
+                measurementMode = false;
                 
                 // Auto-generate estimate
                 setTimeout(() => {
                     generateEstimate();
-                }, 500);
+                }, 300);
             };
             
             img.onerror = (error) => {
-                console.error('Error loading satellite image:', error);
-                showAddressError('Could not load satellite image. Please try another address.');
+                console.error('All satellite image services failed');
+                // If all satellite services fail, just show the map and generate estimate anyway
+                showAddressResult(address, lat, lng);
+                document.getElementById('imagePreview').style.display = 'none';
+                
+                // Still generate estimate automatically
+                setTimeout(() => {
+                    generateEstimate();
+                }, 300);
             };
             
             img.src = imageUrl;
