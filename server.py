@@ -14,17 +14,16 @@ import io
 try:
     import numpy as np
     from PIL import Image
-    import cv2
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
-    print("[WARNING] OpenCV/PIL not available. Install with: pip install opencv-python pillow numpy", file=sys.stderr)
+    print("[WARNING] PIL/NumPy not available. Install with: pip install pillow numpy", file=sys.stderr)
 
 PORT = 8000
 
 def detect_roof_area(lat, lng):
     """
-    Detect building/roof area from satellite image using edge detection.
+    Detect building/roof area from satellite image using simple pixel analysis.
     Returns estimated roof area in square feet.
     """
     if not HAS_CV2:
@@ -50,35 +49,57 @@ def detect_roof_area(lat, lng):
         with urllib.request.urlopen(tile_url, context=ctx, timeout=10) as response:
             img_data = response.read()
         
-        # Load image
+        # Load image using PIL
         img = Image.open(io.BytesIO(img_data))
-        img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         
-        # Convert to grayscale
-        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+        # Convert to numpy array
+        img_array = np.array(img)
         
-        # Apply Canny edge detection
-        edges = cv2.Canny(gray, 50, 150)
+        # Convert to grayscale using PIL then to numpy
+        if img.mode != 'L':
+            img_gray = img.convert('L')
+        else:
+            img_gray = img
+            
+        gray_array = np.array(img_gray)
         
-        # Find contours
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Simple edge detection using gradient
+        gx = np.gradient(gray_array, axis=1)
+        gy = np.gradient(gray_array, axis=0)
+        edges = np.sqrt(gx**2 + gy**2)
         
-        if not contours:
-            return 4500  # Default if no contours found
+        # Threshold to find edges
+        edge_binary = edges > np.percentile(edges, 75)
         
-        # Find the largest contour (likely the building)
-        largest_contour = max(contours, key=cv2.contourArea)
-        area_pixels = cv2.contourArea(largest_contour)
+        # Find building area - look for dark regions with significant edges
+        # Buildings typically are darker than surrounding areas
+        dark_pixels = gray_array < 150  # Darker pixels
+        building_mask = dark_pixels & edge_binary
+        
+        area_pixels = np.sum(building_mask)
+        
+        if area_pixels < 100:
+            # If no clear building found, try a different approach
+            # Use color variation as proxy for building
+            if len(img_array.shape) == 3 and img_array.shape[2] >= 3:
+                color_var = np.std(img_array[:,:,:3], axis=2)
+                building_candidate = color_var > 30  
+                area_pixels = np.sum(building_candidate)
+            else:
+                return 4500
         
         # Convert pixels to real-world area
         # At zoom level 18, ESRI tiles are 256x256 pixels
-        # Each tile covers approximately 38.2 meters x 38.2 meters at equator
+        # Each tile covers approximately 38.2 meters x 38.2 meters at US latitudes
         meters_per_tile = 38.2  # Approximate at US latitudes
         meters_per_pixel = meters_per_tile / 256.0
         sq_meters_per_pixel = meters_per_pixel ** 2
         
         area_sq_meters = area_pixels * sq_meters_per_pixel
         area_sq_feet = area_sq_meters * 10.764  # Convert to sq feet
+        
+        # Apply correction factor - detected area tends to overestimate
+        area_sq_feet = area_sq_feet * 0.6  # 60% of detected area is roof
         
         # Sanity checks - roof area typically 1000-10000 SF
         if area_sq_feet < 500:
