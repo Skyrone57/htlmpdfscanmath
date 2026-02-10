@@ -735,7 +735,7 @@
             
             const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
             
-            fetch(nominatimUrl)
+            fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(nominatimUrl)}`)
                 .then(response => response.json())
                 .then(data => {
                     console.log('Suggestions:', data);
@@ -809,13 +809,13 @@
             // Show loading state
             showAddressResult('🔄 Searching...', 0, 0);
             
-            // Use OpenStreetMap Nominatim
-            console.log('Using OpenStreetMap Nominatim...');
+            // Use OpenStreetMap Nominatim with CORS proxy
+            console.log('Using OpenStreetMap Nominatim with CORS proxy...');
             
             const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`;
             console.log('Fetching from:', nominatimUrl);
             
-            fetch(nominatimUrl)
+            fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(nominatimUrl)}`)
                 .then(response => {
                     console.log('Response status:', response.status);
                     return response.json();
