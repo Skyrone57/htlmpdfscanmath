@@ -700,17 +700,9 @@
     
     <script>
         
-        // Get the correct proxy URL based on current host
         function getProxyURL(endpoint, params) {
-            // If running on Codespace/GitHub Pages, use the same host but port 8001
-            let proxyBase = 'http://localhost:8001';
-            
-            if (window.location.hostname.includes('app.github.dev')) {
-                // Running on GitHub Codespace - replace port 8000 with 8001
-                proxyBase = `https://${window.location.hostname.replace('-8000.', '-8001.')}`;
-            }
-            
-            let url = `${proxyBase}${endpoint}`;
+            // Use relative URLs - same origin, so no CORS issues
+            let url = endpoint;
             if (params) {
                 const queryString = Object.keys(params)
                     .map(key => `${key}=${encodeURIComponent(params[key])}`)
