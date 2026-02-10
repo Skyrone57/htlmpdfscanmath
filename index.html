@@ -471,61 +471,23 @@
         </header>
         
         <div class="main-content">
-            <!-- Left Panel: Image Upload & Measurement -->
+            <!-- Left Panel: Address Input -->
             <div class="panel">
-                <h2>📸 Image Analysis</h2>
+                <h2>🏠 Property Address</h2>
                 
-                <!-- Address Search Section -->
-                <div class="address-search-section">
-                    <h3>Search by Address</h3>
-                    <div class="input-group" style="grid-template-columns: 1fr;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <input type="text" id="addressInput" placeholder="Enter address (e.g., 123 Main St, City, State 12345)">
-                            <button class="upload-btn" onclick="searchAddress()" style="margin-top: 10px; width: 100%;">
-                                🔍 Search Address
-                            </button>
-                        </div>
-                    </div>
-                    <p class="hint-text" style="margin-top: 10px;">Get satellite imagery from Google Maps</p>
-                </div>
-                
-                <div style="text-align: center; margin: 20px 0; color: #999; font-size: 0.9em;">
-                    <strong>— OR —</strong>
-                </div>
-                
-                <div class="upload-area" id="uploadArea">
-                    <div class="upload-icon">📷</div>
-                    <p><strong>Click to upload or drag and drop</strong></p>
-                    <p style="font-size: 0.9em;">Supported formats: JPG, PNG, GIF</p>
-                    <button class="upload-btn" onclick="document.getElementById('imageInput').click()">
-                        Choose Image
+                <div class="form-group">
+                    <label for="addressInput">Enter Address</label>
+                    <input type="text" id="addressInput" placeholder="e.g., 123 Main St, New York, NY 10001">
+                    <button class="upload-btn" onclick="searchAddress()" style="width: 100%; margin-top: 10px;">
+                        🔍 Search Address
                     </button>
-                    <input type="file" id="imageInput" accept="image/*">
                 </div>
+                
+                <div id="addressResult"></div>
                 
                 <div class="image-preview" id="imagePreview">
                     <div class="image-container">
                         <canvas id="canvas"></canvas>
-                    </div>
-                    
-                    <div class="measurement-info" id="measurementInfo">
-                        <p><strong>Measurement Mode Active</strong></p>
-                        <p id="pixelInfo"></p>
-                        <p id="areaInfo"></p>
-                        <p id="pixelPerFeetInfo"></p>
-                        <p class="hint-text" id="hint"></p>
-                    </div>
-                    
-                    <div class="measurement-controls">
-                        <button class="btn-secondary" onclick="toggleMeasurementMode()">
-                            📏 Measure Area
-                        </button>
-                        <button class="btn-secondary" onclick="setPixelsPerFoot()">
-                            ⚙️ Set Scale
-                        </button>
-                        <button class="btn-danger" onclick="clearMeasurement()">
-                            🗑️ Clear
-                        </button>
                     </div>
                 </div>
             </div>
@@ -535,9 +497,9 @@
                 <h2>📋 Estimation Details</h2>
                 
                 <div class="form-group">
-                    <label for="roofArea">Roof Area (Square Feet)*</label>
+                    <label for="roofArea">Estimated Roof Area (Square Feet)</label>
                     <input type="number" id="roofArea" placeholder="e.g., 4700" min="0" step="10">
-                    <p class="hint-text">Measure from satellite image or use calculator</p>
+                    <p class="hint-text">Default estimate based on property. Adjust if needed.</p>
                 </div>
                 
                 <div class="input-group">
@@ -689,27 +651,12 @@
         });
         
         function setupEventListeners() {
-            const uploadArea = document.getElementById('uploadArea');
             const imageInput = document.getElementById('imageInput');
-            
-            uploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadArea.classList.add('dragover');
-            });
-            
-            uploadArea.addEventListener('dragleave', () => {
-                uploadArea.classList.remove('dragover');
-            });
-            
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.classList.remove('dragover');
-                handleImageSelect(e.dataTransfer.files[0]);
-            });
-            
-            imageInput.addEventListener('change', (e) => {
-                handleImageSelect(e.target.files[0]);
-            });
+            if (imageInput) {
+                imageInput.addEventListener('change', (e) => {
+                    handleImageSelect(e.target.files[0]);
+                });
+            }
             
             canvas.addEventListener('click', handleCanvasClick);
             canvas.addEventListener('mousemove', handleCanvasHover);
@@ -760,19 +707,17 @@
                 imageLoaded = true;
                 
                 document.getElementById('imagePreview').style.display = 'block';
-                document.getElementById('measurementInfo').classList.remove('show');
                 points = [];
                 pixelsPerFoot = null;
                 measurementMode = false;
                 
-                // Auto-select measurement mode for user convenience
-                setTimeout(() => {
-                    alert('Satellite image loaded! Click "📏 Measure Area" to trace the roof outline and set the scale.');
-                }, 500);
+                // Set default roof area estimate (typical residential roof)
+                // Based on typical property estimations
+                document.getElementById('roofArea').value = '4500';
             };
             
             img.onerror = () => {
-                showAddressError('Could not load satellite image. Please try uploading an image manually.');
+                showAddressError('Could not load satellite image. Please try another address.');
             };
             
             img.src = imageUrl;
@@ -820,7 +765,6 @@
                     imageLoaded = true;
                     
                     document.getElementById('imagePreview').style.display = 'block';
-                    document.getElementById('measurementInfo').classList.remove('show');
                     points = [];
                     pixelsPerFoot = null;
                     measurementMode = false;
@@ -831,23 +775,7 @@
         }
         
         function toggleMeasurementMode() {
-            if (!imageLoaded) {
-                alert('Please load an image first');
-                return;
-            }
-            
-            measurementMode = !measurementMode;
-            points = [];
-            
-            if (measurementMode) {
-                document.getElementById('measurementInfo').classList.add('show');
-                document.getElementById('hint').textContent = 'Click on the image to mark points for measurement. A minimum of 3 points is needed.';
-                canvas.style.cursor = 'crosshair';
-            } else {
-                document.getElementById('hint').textContent = '';
-                canvas.style.cursor = 'default';
-                redrawCanvas();
-            }
+            // Placeholder - not used in simplified version
         }
         
         function handleCanvasClick(e) {
@@ -1114,9 +1042,10 @@
             resetForm();
             document.getElementById('estimateContainer').classList.remove('show');
             document.getElementById('imagePreview').style.display = 'none';
-            document.getElementById('imageInput').value = '';
+            document.getElementById('addressInput').value = '';
+            const resultDiv = document.getElementById('addressResult');
+            if (resultDiv) resultDiv.innerHTML = '';
             imageLoaded = false;
-            clearMeasurement();
         }
     </script>
 </body>
