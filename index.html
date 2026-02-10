@@ -633,7 +633,6 @@
     </div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDrJ-HvLTrpyVOVsZW3ooNALyDhXe4lBh8&libraries=places"></script>
     
     <script>
         let canvas, ctx;
@@ -642,13 +641,28 @@
         let points = [];
         let pixelsPerFoot = null;
         let currentImage = null;
+        let geocoder = null;
         
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             canvas = document.getElementById('canvas');
             ctx = canvas.getContext('2d');
             setupEventListeners();
+            
+            // Initialize geocoder after Google Maps API loads
+            setTimeout(() => {
+                if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
+                    geocoder = new google.maps.Geocoder();
+                    console.log('Google Maps Geocoder initialized');
+                }
+            }, 1000);
         });
+    </script>
+    
+    <!-- Load Google Maps API -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDrJ-HvLTrpyVOVsZW3ooNALyDhXe4lBh8&libraries=places"></script>
+    
+    <script>
         
         function setupEventListeners() {
             const imageInput = document.getElementById('imageInput');
@@ -670,28 +684,32 @@
                 return;
             }
             
-            // Check if Google Maps API is loaded
-            if (typeof google === 'undefined' || typeof google.maps === 'undefined') {
-                showAddressError('Google Maps API is not loaded. Please refresh the page.');
+            // Check if geocoder is initialized
+            if (!geocoder) {
+                showAddressError('Google Maps is still loading. Please try again in a moment.');
+                console.log('Geocoder not initialized yet');
                 return;
             }
             
-            const geocoder = new google.maps.Geocoder();
+            console.log('Searching for address:', address);
             
             geocoder.geocode({ address: address }, (results, status) => {
                 console.log('Geocode status:', status);
                 console.log('Results:', results);
                 
-                if (status === 'OK' && results && results.length > 0) {
+                if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
                     const location = results[0].geometry.location;
                     const lat = location.lat();
                     const lng = location.lng();
                     const formattedAddress = results[0].formatted_address;
                     
+                    console.log('Found location:', lat, lng);
+                    
                     showAddressResult(formattedAddress, lat, lng);
                     fetchSatelliteImage(lat, lng, formattedAddress);
                 } else {
                     showAddressError('Address not found. Please try a different address. (Status: ' + status + ')');
+                    console.error('Geocode failed:', status);
                 }
             });
         }
