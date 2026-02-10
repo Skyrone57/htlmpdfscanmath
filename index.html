@@ -461,6 +461,28 @@
             color: #666;
             font-style: italic;
         }
+
+        .address-suggestion-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .address-suggestion-item:hover {
+            background-color: #f0f2ff;
+        }
+
+        .address-suggestion-item strong {
+            display: block;
+            color: #333;
+            margin-bottom: 3px;
+        }
+
+        .address-suggestion-item small {
+            color: #999;
+            font-size: 0.85em;
+        }
     </style>
 </head>
 <body>
@@ -477,7 +499,8 @@
                 
                 <div class="form-group">
                     <label for="addressInput">Enter Address</label>
-                    <input type="text" id="addressInput" placeholder="e.g., 123 Main St, New York, NY 10001">
+                    <input type="text" id="addressInput" placeholder="e.g., 3519 Sciotangy Dr..." autocomplete="off">
+                    <div id="addressSuggestions" style="border: 1px solid #ddd; border-top: none; display: none; max-height: 200px; overflow-y: auto; background: white; border-radius: 0 0 6px 6px;"></div>
                     <button class="upload-btn" onclick="searchAddress()" style="width: 100%; margin-top: 10px;">
                         🔍 Search Address
                     </button>
@@ -687,6 +710,83 @@
             
             canvas.addEventListener('click', handleCanvasClick);
             canvas.addEventListener('mousemove', handleCanvasHover);
+            
+            // Add address autocomplete
+            const addressInput = document.getElementById('addressInput');
+            addressInput.addEventListener('input', (e) => {
+                const value = e.target.value.trim();
+                if (value.length > 2) {
+                    getAddressSuggestions(value);
+                } else {
+                    document.getElementById('addressSuggestions').style.display = 'none';
+                }
+            });
+            
+            // Close suggestions when clicking outside
+            document.addEventListener('click', (e) => {
+                if (e.target.id !== 'addressInput' && !e.target.classList.contains('address-suggestion-item')) {
+                    document.getElementById('addressSuggestions').style.display = 'none';
+                }
+            });
+        }
+        
+        function getAddressSuggestions(query) {
+            console.log('Getting suggestions for:', query);
+            
+            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
+            
+            fetch(nominatimUrl)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Suggestions:', data);
+                    
+                    const suggestionsDiv = document.getElementById('addressSuggestions');
+                    suggestionsDiv.innerHTML = '';
+                    
+                    if (data && data.length > 0) {
+                        data.forEach((result, index) => {
+                            const item = document.createElement('div');
+                            item.className = 'address-suggestion-item';
+                            
+                            // Get the main address line
+                            const addressLine = result.display_name.split(',')[0];
+                            const fullAddress = result.display_name;
+                            
+                            item.innerHTML = `
+                                <strong>${addressLine}</strong>
+                                <small>${fullAddress.substring(addressLine.length + 2)}</small>
+                            `;
+                            
+                            item.onclick = () => {
+                                console.log('Selected address:', fullAddress);
+                                document.getElementById('addressInput').value = addressLine;
+                                selectAddressSuggestion(result.lat, result.lon, fullAddress);
+                                suggestionsDiv.style.display = 'none';
+                            };
+                            
+                            suggestionsDiv.appendChild(item);
+                        });
+                        suggestionsDiv.style.display = 'block';
+                    } else {
+                        suggestionsDiv.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error getting suggestions:', error);
+                });
+        }
+        
+        function selectAddressSuggestion(lat, lng, fullAddress) {
+            console.log('Selected:', lat, lng, fullAddress);
+            
+            currentAddress = fullAddress;
+            searchInProgress = true;
+            
+            showAddressResult(fullAddress, lat, lng);
+            document.getElementById('roofArea').value = '4500';
+            
+            // Fetch satellite image
+            fetchSatelliteImageOSM(lat, lng, fullAddress);
         }
         
         function searchAddress() {
@@ -709,10 +809,10 @@
             // Show loading state
             showAddressResult('🔄 Searching...', 0, 0);
             
-            // Fallback: Use OpenStreetMap Nominatim (free, no API key needed)
+            // Use OpenStreetMap Nominatim
             console.log('Using OpenStreetMap Nominatim...');
             
-            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
+            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`;
             console.log('Fetching from:', nominatimUrl);
             
             fetch(nominatimUrl)
@@ -734,6 +834,9 @@
                         console.log('Lat:', lat, 'Lng:', lng);
                         console.log('Display name:', displayName);
                         
+                        // Update input with full address from Nominatim
+                        document.getElementById('addressInput').value = displayName.split(',')[0];
+                        
                         currentAddress = displayName;
                         showAddressResult(displayName, lat, lng);
                         
@@ -744,7 +847,7 @@
                         fetchSatelliteImageOSM(lat, lng, displayName);
                     } else {
                         console.error('No results from Nominatim');
-                        showAddressError('Address not found. Please try with more details like: "3519 Sciotangy Drive, Columbus, Ohio"');
+                        showAddressError('Address not found. Start typing to see suggestions.');
                         searchInProgress = false;
                     }
                 })
